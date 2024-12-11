@@ -1,0 +1,84 @@
+scenario_name: Chile/Belgium # Name of the scenario
+scenario_description: Chile/Belgium # Description of the scenario
+#DATA FORMAT : DATE, GENERATION, TECNOLOGY
+
+# Archive with the data
+data: data/Prod_by_day.csv # Path to the archive from the python main.py or just put the full path
+
+freq: 'D' # Frequency of the data M=Month D=Day 1H= 1Hour 15m=15 minutes
+groupby: Day # Groupby to use in the data
+
+# Columns to use IN YOUR DATABASE PLEASE USE THE SAME NAME OF THE COLUMNS
+date: Date # Date of the data
+#zones: LOCATION # Zones
+
+
+pattern: Pattern.csv # Path to the pattern file
+
+objetive_date: 01/01/2100 # Date to reach the objetive USE DATE FORMAT DD/MM/YYYY
+
+
+#model: prophet # Model to use
+#growth: logistic # Growth of the model logistic, linear, just for prophet
+target_production: 420000 # Target production for total energy for prophet and logistic growth 560000 (2100)
+
+plot: True # Plot the results
+#make_macrozone: True # Make the macrozone
+merge_csv: True # Merge the csv files
+variability: True # Variability of the data
+
+energy: # Energies to predict
+  Predict: # PUT HERE THE NAME OF THE ENERGY YOU WANT TO PREDICT
+    - Solar :
+      - 0.35 # PERCENTAGE OF THE ENERGY TO PREDICT
+      - linear
+    - Eolica :
+      - 0.35
+      - linear # NAME OF THE ENERGY : PERCENTAGE
+    - Hidraulica:
+      - 0.17
+      - linear # NAME OF THE ENERGY : PERCENTAGE
+    - Carbon:
+      - 0.0
+      - linear # NAME OF THE ENERGY : PERCENTAGE
+    - Gas_Natural:
+      - 0.0
+      - linear # NAME OF THE ENERGY : PERCENTAGE
+    - Geotermica:
+      - 0.03
+      - linear # NAME OF THE ENERGY : PERCENTAGE
+    - Biomasa:
+      - 0.03
+      - linear # NAME OF THE ENERGY : PERCENTAGE
+    - Nuclear:
+      - 0.070
+      - custom
+      - data:
+          - 2035-01-01 00:00:00
+          - 2040-01-01 00:00:00
+          - 2050-01-01 00:00:00
+          - 2055-01-01 00:00:00
+          - 2064-01-01 00:00:00
+          - 2070-01-01 00:00:00
+          - 2078-01-01 00:00:00
+          - 2085-01-01 00:00:00
+          - 2092-01-01 00:00:00
+          - 2099-01-01 00:00:00
+
+      - values:
+          - 19440
+          - 6480
+          - 6480
+          - 6480
+          - 6480
+          - 6480
+          - 6480
+          - 6480
+          - 6480
+          - 6480
+
+
+
+          
+
+
