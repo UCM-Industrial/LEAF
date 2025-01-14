@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.stats import *
+from scipy.stats import multivariate_normal
 import matplotlib.pyplot as plt
 # Create a dictionary of distribution functions
 distribution_functions = {
@@ -134,56 +135,89 @@ def residual_params_dict(params_csv):
     
     return residual_params_dict
 
-def perturb_df_energies(forecast_df, residual_params_dict,User):
-    Sigma=User.get('Variation_range')
+
+def perturb_df_energies(forecast_df, residual_params_dict, User):
+    Sigma = User.get('Variation_range')
     technologys = [col for col in forecast_df.columns if col in residual_params_dict and 'trend' not in col.lower()]
     num_samples = len(forecast_df)
 
-    # Create a DataFrame to store the perturbations
-    perturbations = pd.DataFrame(index=forecast_df.index, columns=technologys)
+    # Verificar si todas las tecnologías tienen distribución normal
+    all_norm = all(residual_params_dict[tech]['distribution'] == 'norm' for tech in technologys)
+    all_t_student = all(residual_params_dict[tech]['distribution'] == 't' for tech in technologys)
+    if all_norm:
+        # Crear un array de medias y una matriz de covarianza
+        means = np.array([residual_params_dict[tech]['loc'] for tech in technologys])
+        cov_matrix = np.diag([residual_params_dict[tech]['scale']**2 for tech in technologys])
+        print("n")
+        # Generar muestras aleatorias usando multivariate_normal
+        perturbations = multivariate_normal.rvs(mean=means, cov=cov_matrix, size=num_samples)
+        perturbations = pd.DataFrame(perturbations, columns=technologys, index=forecast_df.index)
 
-    for technology in technologys:
-        # Get the distribution and its parameters
-        dist_name = residual_params_dict[technology]['distribution']
-        
-        # Filter the parameters excluding 'distribution'
-        params = {k: v for k, v in residual_params_dict[technology].items() if k != 'distribution'}
-
-        # Get the sampling function of the distribution from the dictionary
-        perturbation_func = distribution_functions.get(dist_name)
-        if perturbation_func:
-            try:
-                # Generate the perturbation using the appropriate sampling function
-                perturbation = perturbation_func(size=num_samples, **params)
-            except Exception as e:
-                print(f"Error generating perturbation for {technology}: {e}")
-                perturbation = np.zeros(num_samples)  # Por defecto a cero si hay un error
-            
-            # Clip the perturbations 
-            mean = params['loc']
-            std_dev = params['scale']
-
-            # Apply the perturbations to the forecast DataFrame
+        # Aplicar el clipping basado en Sigma
+        for tech in technologys:
+            mean = residual_params_dict[tech]['loc']
+            std_dev = residual_params_dict[tech]['scale']
             lower_bound = mean - Sigma * std_dev
-            upper_bound = mean +  Sigma * std_dev
-            perturbation = np.clip(perturbation, lower_bound, upper_bound)
-            # Save the perturbation in the DataFrame
-            perturbations[technology] = perturbation
-            
-        else:
-            print(f"Distribution '{dist_name}' not found for technology '{technology}'.")
-            perturbations[technology] = np.zeros(num_samples)  # Por defecto a cero si la distribución no se encuentra
-        
-    # Apply the perturbations to the forecast DataFrame
+            upper_bound = mean + Sigma * std_dev
+            perturbations[tech] = np.clip(perturbations[tech], lower_bound, upper_bound)
+    elif all_t_student:
+        print("t")
+        means = np.array([residual_params_dict[tech]['loc'] for tech in technologys])
+        cov_matrix = np.diag([residual_params_dict[tech]['scale']**2 for tech in technologys])
+        print(cov_matrix)
+        # Generar muestras aleatorias usando multivariate_t
+        perturbations = multivariate_t.rvs(loc=means, shape=cov_matrix, df=5, size=num_samples)
+        perturbations = pd.DataFrame(perturbations, columns=technologys, index=forecast_df.index)
+
+        # Aplicar el clipping basado en Sigma
+        for tech in technologys:
+            mean = residual_params_dict[tech]['loc']
+            std_dev = residual_params_dict[tech]['scale']
+            lower_bound = mean - Sigma * std_dev
+            upper_bound = mean + Sigma * std_dev
+            perturbations[tech] = np.clip(perturbations[tech], lower_bound, upper_bound)
+
+    else:
+        print("o")
+        # Crear un DataFrame para almacenar las perturbaciones
+        perturbations = pd.DataFrame(index=forecast_df.index, columns=technologys)
+
+        for technology in technologys:
+            # Obtener la distribución y sus parámetros
+            dist_name = residual_params_dict[technology]['distribution']
+            params = {k: v for k, v in residual_params_dict[technology].items() if k != 'distribution'}
+
+            # Obtener la función de muestreo de la distribución
+            perturbation_func = distribution_functions.get(dist_name)
+            if perturbation_func:
+                try:
+                    # Generar la perturbación usando la función de muestreo
+                    perturbation = perturbation_func(size=num_samples, **params)
+                except Exception as e:
+                    print(f"Error generating perturbation for {technology}: {e}")
+                    perturbation = np.zeros(num_samples)  # Por defecto a cero si hay un error
+
+                # Aplicar el clipping basado en Sigma
+                mean = params['loc']
+                std_dev = params['scale']
+                lower_bound = mean - Sigma * std_dev
+                upper_bound = mean + Sigma * std_dev
+                perturbation = np.clip(perturbation, lower_bound, upper_bound)
+                perturbations[technology] = perturbation
+            else:
+                print(f"Distribution '{dist_name}' not found for technology '{technology}'.")
+                perturbations[technology] = np.zeros(num_samples)  # Por defecto a cero si la distribución no se encuentra
+
+    # Aplicar las perturbaciones al DataFrame de pronóstico
     for technology in technologys:
         forecast_df[technology] = forecast_df[technology] + perturbations[technology]
-        
-         # The values are not negative
-        forecast_df[technology] = forecast_df[technology].apply(lambda x: max(0, x))
-    
+        forecast_df[technology] = forecast_df[technology].apply(lambda x: max(0, x))  # Asegurar que los valores no sean negativos
+
+    # Calcular la columna 'Total' si existe
     technologys_para_total = [col for col in technologys if col not in ['Nuclear_Centrals_trend', 'Demand']]
     if 'Nuclear' in forecast_df.columns:
-        technologys_para_total.append('Nuclear')  # Ensure to include Nuclear
+        technologys_para_total.append('Nuclear')
     if 'Total' in forecast_df.columns:
         forecast_df['Total'] = forecast_df[technologys_para_total].sum(axis=1)
+
     return forecast_df

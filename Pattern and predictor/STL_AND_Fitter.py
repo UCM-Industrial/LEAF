@@ -4,12 +4,16 @@ from fitter import Fitter
 import matplotlib.pyplot as plt
 import os
 
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
+
+
 def create_output_directory():
-    # Create the 'output' folder if it does not exist
     output_dir = os.path.join(os.getcwd(), 'output')
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     return output_dir
+
+
 
 def stl_decomposition(input_csv_list):
     combined_stl_results = {}
@@ -21,74 +25,81 @@ def stl_decomposition(input_csv_list):
             stl = STL(df[column], seasonal=13, robust=True)
             result = stl.fit()
             
+            # Almacenar los residuos en el DataFrame
             if column not in combined_stl_results:
-                combined_stl_results[column] = {
-                    'trend': [],
-                    'seasonal': [],
-                    'residual': []
-                }
+                combined_stl_results[column] = result.resid  # Almacenar directamente los residuos como Series
+            # Graficar los componentes
+            plt.figure(figsize=(12, 8))
+            plt.subplot(4, 1, 1)
+            plt.plot(df[column], label='Original')
+            plt.title(f'{column} - Descomposición STL)')
+            plt.legend()
             
-            combined_stl_results[column]['trend'].append(result.trend)
-            combined_stl_results[column]['seasonal'].append(result.seasonal)
-            combined_stl_results[column]['residual'].append(result.resid)
-    
-    return combined_stl_results
+            plt.subplot(4, 1, 2)
+            plt.plot(result.trend, label='Tendencia')
+            plt.legend()
+            
+            plt.subplot(4, 1, 3)
+            plt.plot(result.seasonal, label='Estacionalidad')
+            plt.legend()
+            
+            plt.subplot(4, 1, 4)
+            plt.plot(result.resid, label='Residual')
+            plt.legend()
+            
+            plt.tight_layout()
+            plt.savefig (f'{column}label.png')
+            plt.close()
+    # Convertir el diccionario a un DataFrame
+    residuals_df = pd.DataFrame(combined_stl_results)        
+    return residuals_df
 
 def fit_distribution_with_fitter(data, column_name, component_name, output_dir):
-    # Create a Fitter object and fit distributions to the data
-    f = Fitter(data, distributions=[
-        'alpha', 'anglit', 'arcsine', 'argus', 'beta', 'betaprime', 'bradford', 'burr', 'cauchy', 'chi', 'chi2', 'cosine', 'crystalball', 'dgamma', 'dweibull', 'erlang', 'expon', 'exponnorm', 'exponpow', 'exponweib', 'f', 'fatiguelife', 'fisk', 'foldcauchy', 'foldnorm', 'frechet_l', 'frechet_r', 'gamma', 'gausshyper', 'genexpon', 'genextreme', 'gengamma', 'genhalflogistic', 'geninvgauss', 'genlogistic', 'gennorm', 'genpareto', 'gilbrat', 'gompertz', 'gumbel_l', 'gumbel_r', 'halfcauchy', 'halfgennorm', 'halflogistic', 'halfnorm',
-        'hypsecant', 'invgamma', 'invgauss', 'invweibull', 'johnsonsb', 'johnsonsu', 'kappa3', 'kappa4', 'ksone', 'kstwo', 'kstwobign', 'laplace', 'levy', 'levy_l', 'levy_stable', 'loggamma', 'logistic', 'loglaplace', 'lognorm', 'loguniform', 'lomax', 'maxwell', 'mielke', 'moyal', 'nakagami', 'ncf', 'nct', 'ncx2',
-        'norm', 'norminvgauss', 'pareto', 'pearson3', 'powerlaw', 'powerlognorm', 'powernorm', 'rayleigh', 'rdist', 'recipinvgauss', 'reciprocal', 'rice', 'rv_continuous', 'rv_histogram', 'semicircular', 'skewnorm', 't', 'trapz', 'triang', 'truncexpon', 'truncnorm', 'tukeylambda', 'uniform', 'vonmises', 'vonmises_line', 'wald', 'weibull_max', 'weibull_min', 'wrapcauchy'])
+    f = Fitter(data, distributions=['t','tukeylambda'])  # Simplificado para el ejemplo
     f.fit()
     
-    # Show summary and best distributions
     print(f"\nBest distributions for {column_name} - {component_name}:")
     print(f.summary())
     
-    # Plot the results and save the figure in the 'output' folder
     plt.figure(figsize=(10,6))
     plt.hist(data, bins=50, density=True, alpha=0.5, label=component_name)
     f.plot_pdf()
-    plt.plot([], [], ' ', label='Fit')  # Create an empty legend for the fit
+    plt.plot([], [], ' ', label='Fit')
     plt.title(f'{column_name} - {component_name}')
     plt.legend()
     
-    # Save the figure in the 'output' folder
     plt.savefig(os.path.join(output_dir, f'{column_name}_{component_name}_distribution_fit.png'))
-    plt.close()  # Close the figure to not show it immediately
+    plt.close()
 
-    # Get the best distribution
     best_dist_dict = f.get_best(method='sumsquare_error')
-    
-    # Get the name of the distribution and the parameters
     best_dist_name = list(best_dist_dict.keys())[0]
     best_dist_params = list(best_dist_dict.values())[0]
     
     return best_dist_name, best_dist_params
 
-def analyze_distributions_with_fitter(stl_results):
-    output_dir = create_output_directory()  # Create the 'output' folder
+def analyze_distributions_with_fitter(residuals_df):
+    output_dir = create_output_directory()
     best_fits = {}
     residual_parameters = []
 
-    for column, components in stl_results.items():
+    for column in residuals_df.columns:
         best_fits[column] = {}
         
-        for component_name, data_list in components.items():
-            combined_data = pd.concat(data_list)  # Combine results from multiple CSVs
-            
-            best_dist_name, best_dist = fit_distribution_with_fitter(combined_data, column, component_name, output_dir)
-            best_fits[column][component_name] = (best_dist_name, best_dist)
-            
-            # If it's a residual component, store the parameters and the distribution name
-            if component_name == 'residual':
-                params_dict = {'column': column, 'distribution': best_dist_name}
-                params_dict.update(best_dist)
-                residual_parameters.append(params_dict)
+        # Asegúrate de que los residuos sean numéricos
+        combined_data = residuals_df[column].dropna()  # Eliminar NaN antes de ajustar la distribución
+
+        # Ajustar la distribución
+        best_dist_name, best_dist = fit_distribution_with_fitter(combined_data, column, 'residual', output_dir)
+        best_fits[column]['residual'] = (best_dist_name, best_dist)
+        
+        # Almacenar parámetros residuales
+        params_dict = {'column': column, 'distribution': best_dist_name}
+        params_dict.update(best_dist)
+        residual_parameters.append(params_dict)
     
-    # Export the residual parameters to a CSV in the 'output' folder
+    # Exportar parámetros residuales a CSV
     residual_df = pd.DataFrame(residual_parameters)
     residual_df.to_csv(os.path.join(output_dir, 'residual_distribution.csv'), index=False)
     
     return best_fits
+

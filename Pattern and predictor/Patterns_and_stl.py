@@ -3,11 +3,14 @@ import sys
 import warnings
 import numpy as np
 from prophet import Prophet
+import seaborn as sns
 from prophet.plot import seasonality_plot_df
 from yaml import SafeLoader
 import pandas as pd
 import yaml
-from STL_AND_Fitter import stl_decomposition,analyze_distributions_with_fitter
+import matplotlib.pyplot as plt
+
+from STL_AND_Fitter import stl_decomposition,analyze_distributions_with_fitter,fit_copula_to_residuals
 
 warnings.filterwarnings("ignore")
 
@@ -136,4 +139,5 @@ if __name__ == '__main__':
             print(f"\nColumn: {column}")
             for component_name, (dist_name, dist_info) in components.items():
                 print(f"  {component_name} ({dist_name}): {dist_info}")
-            
+
+    
