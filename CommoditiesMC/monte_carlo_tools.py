@@ -138,16 +138,19 @@ def residual_params_dict(params_csv):
 
 def perturb_df_energies(forecast_df, residual_params_dict, User):
     Sigma = User.get('Variation_range')
+    cov_matrix_file = ('Cov_matrix.csv')
     technologys = [col for col in forecast_df.columns if col in residual_params_dict and 'trend' not in col.lower()]
     num_samples = len(forecast_df)
-
+    # Cargar la matriz de covarianza desde un archivo CSV
+    cov_matrix_df = pd.read_csv(cov_matrix_file, index_col=0)
+    cov_matrix_df = cov_matrix_df.loc[technologys, technologys]
     # Verificar si todas las tecnologías tienen distribución normal
     all_norm = all(residual_params_dict[tech]['distribution'] == 'norm' for tech in technologys)
     all_t_student = all(residual_params_dict[tech]['distribution'] == 't' for tech in technologys)
     if all_norm:
         # Crear un array de medias y una matriz de covarianza
         means = np.array([residual_params_dict[tech]['loc'] for tech in technologys])
-        cov_matrix = np.diag([residual_params_dict[tech]['scale']**2 for tech in technologys])
+        cov_matrix = cov_matrix_df.values
         print("n")
         # Generar muestras aleatorias usando multivariate_normal
         perturbations = multivariate_normal.rvs(mean=means, cov=cov_matrix, size=num_samples)
@@ -163,7 +166,7 @@ def perturb_df_energies(forecast_df, residual_params_dict, User):
     elif all_t_student:
         print("t")
         means = np.array([residual_params_dict[tech]['loc'] for tech in technologys])
-        cov_matrix = np.diag([residual_params_dict[tech]['scale']**2 for tech in technologys])
+        cov_matrix = cov_matrix_df.values
         print(cov_matrix)
         # Generar muestras aleatorias usando multivariate_t
         perturbations = multivariate_t.rvs(loc=means, shape=cov_matrix, df=5, size=num_samples)

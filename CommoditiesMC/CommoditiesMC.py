@@ -331,7 +331,7 @@ def run_simulation(i, df_energies, residual_params, User, current_directory):
 
 def monte_carlo_simulation(num_iterations, User):
     # Load the parameters of the residual distributions
-    residual_params_filepath = 'residual_distribution.csv'
+    residual_params_filepath = 'Residual_distribution.csv'
     residual_params = residual_params_dict(residual_params_filepath)
     
     if num_iterations > 1:
