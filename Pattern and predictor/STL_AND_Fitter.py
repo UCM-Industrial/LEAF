@@ -3,7 +3,7 @@ from statsmodels.tsa.seasonal import STL
 from fitter import Fitter
 import matplotlib.pyplot as plt
 import os
-from copulas.multivariate import GaussianMultivariate
+
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 
 
@@ -12,8 +12,6 @@ def create_output_directory():
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     return output_dir
-
-
 
 def stl_decomposition(input_csv_list):
     combined_stl_results = {}
@@ -51,29 +49,19 @@ def stl_decomposition(input_csv_list):
             plt.savefig (f'{column}label.png')
             plt.close()
     # Convertir el diccionario a un DataFrame
-    residuals_df = pd.DataFrame(combined_stl_results)
-    tukey_data = pd.DataFrame(columns=['Residual', 'Group'])
-    
-    for column in residuals_df.columns:
-        temp_df = pd.DataFrame({
-            'Residual': residuals_df[column].dropna(),
-            'Group': column
-        })
-        tukey_data = pd.concat([tukey_data, temp_df], ignore_index=True)
-    # Realizar el análisis de Tukey
-    tukey_results = pairwise_tukeyhsd(endog=tukey_data['Residual'], groups=tukey_data['Group'], alpha=0.05)
-    
-    # Imprimir los resultados
-    print(tukey_results)
-    
-    # También puedes graficar los resultados
-    tukey_results.plot_simultaneous()
-    plt.show()
-        
+    residuals_df = pd.DataFrame(combined_stl_results)  
+    residuals_df.columns = [col.capitalize() if col.lower() == 'demand' else col for col in residuals_df.columns]
+    cov_matrix = residuals_df.cov()
+    # Crear la carpeta "output" si no existe
+    output_dir = os.path.join(os.getcwd(), 'output')
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    # Guardar la matriz de var/cov en un CSV
+    cov_matrix.to_csv(os.path.join(output_dir, 'Cov_matrix.csv'))      
     return residuals_df
 
 def fit_distribution_with_fitter(data, column_name, component_name, output_dir):
-    f = Fitter(data, distributions=['t','tukeylambda'])  # Simplificado para el ejemplo
+    f = Fitter(data, distributions=['t'])  
     f.fit()
     
     print(f"\nBest distributions for {column_name} - {component_name}:")
@@ -117,31 +105,8 @@ def analyze_distributions_with_fitter(residuals_df):
     
     # Exportar parámetros residuales a CSV
     residual_df = pd.DataFrame(residual_parameters)
-    residual_df.to_csv(os.path.join(output_dir, 'residual_distribution.csv'), index=False)
+    
+    residual_df.to_csv(os.path.join(output_dir, 'Residual_distribution.csv'), index=False)
     
     return best_fits
 
-def fit_copula_to_residuals(residuals_df):
-    # Ajustar la copula Gaussiana
-    copula = GaussianMultivariate()
-    copula.fit(residuals_df)
-    # Revisar la matriz de correlación original
-    model_dict = copula.to_dict()
-    print(model_dict)
-    original_correlation_matrix = residuals_df.corr()
-    print(original_correlation_matrix)
-    # Simular nuevos datos
-    simulated_data = copula.sample(10)  # Simular 1000 muestras
-    print("Distribuciones univariadas ajustadas y sus parámetros:")
-    for i, distribution in enumerate(copula.univariates):
-        column = residuals_df.columns[i]  # Obtener el nombre de la columna correspondiente
-        print(f"{column}: {distribution}")  # Imprimir la distribución ajustada
-        print(f"  Tipo de distribución: {type(distribution)}")
-        # Obtener parámetros de la distribución
-        if hasattr(distribution, 'params'):
-            print(f"  Parámetros: {distribution.params}")  # Imprimir parámetros si están disponibles
-        else:
-            print("  No se encontraron parámetros disponibles.")
-    simulated_correlation_matrix = simulated_data.corr()
-    print(simulated_correlation_matrix)
-    return simulated_data
