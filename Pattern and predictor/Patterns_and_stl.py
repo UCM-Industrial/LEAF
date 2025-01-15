@@ -10,7 +10,7 @@ import pandas as pd
 import yaml
 import matplotlib.pyplot as plt
 
-from STL_AND_Fitter import stl_decomposition,analyze_distributions_with_fitter,fit_copula_to_residuals
+from STL_AND_Fitter import stl_decomposition,analyze_distributions_with_fitter
 
 warnings.filterwarnings("ignore")
 
